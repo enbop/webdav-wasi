@@ -16,7 +16,7 @@ The main runtime path is `wasmtime serve`: Wasmtime owns the HTTP listener, and 
 
 ```bash
 rustup target add wasm32-wasip2
-cargo build --target wasm32-wasip2 --no-default-features --features wasmtime-serve --bin webdav-wasip2
+cargo build --release --target wasm32-wasip2 --no-default-features --features wasmtime-serve --bin webdav-wasip2
 ```
 
 ## Run With Wasmtime
@@ -26,7 +26,7 @@ Serve the local `data` directory:
 ```bash
 mkdir -p data
 wasmtime serve --addr=0.0.0.0:8080 -Scli --dir ./data::data \
-  target/wasm32-wasip2/debug/webdav-wasip2.wasm
+  target/wasm32-wasip2/release/webdav-wasip2.wasm
 ```
 
 Then open or mount:
@@ -40,7 +40,7 @@ Use a different guest-visible root with `WEBDAV_FS_ROOT`:
 ```bash
 mkdir -p shared
 WEBDAV_FS_ROOT=shared wasmtime serve --addr=0.0.0.0:8080 -Scli --dir ./shared::shared \
-  target/wasm32-wasip2/debug/webdav-wasip2.wasm
+  target/wasm32-wasip2/release/webdav-wasip2.wasm
 ```
 
 If no filesystem root is detected, the app falls back to the in-memory demo backend.
@@ -64,7 +64,7 @@ cargo run --features tokio-server --bin webdav-wasip2-tokio-experimental -- --ad
 WASIp2 Tokio builds require Tokio's unstable WASI net support:
 
 ```bash
-RUSTFLAGS="--cfg tokio_unstable" cargo build --target wasm32-wasip2 --features tokio-server --bin webdav-wasip2-tokio-experimental
+RUSTFLAGS="--cfg tokio_unstable" cargo build --release --target wasm32-wasip2 --features tokio-server --bin webdav-wasip2-tokio-experimental
 ```
 
 ## Notes

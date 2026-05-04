@@ -1,6 +1,7 @@
 use std::{env, path::Path, sync::LazyLock};
 
 use dav_server::{DavHandler, body::Body as DavBody, fakels::FakeLs};
+use http::{Method, header::CONTENT_LENGTH};
 use http_body_util::BodyExt;
 use webdav_wasip2::{FileSystemBackend, MemoryBackend, WebDavFileSystem};
 use wstd::http::{Body, Request, Response, StatusCode};
@@ -10,7 +11,13 @@ static DAV_HANDLER: LazyLock<Result<DavHandler, String>> = LazyLock::new(init_ha
 #[wstd::http_server]
 async fn main(request: Request<Body>) -> Result<Response<Body>, wstd::http::Error> {
     match DAV_HANDLER.as_ref() {
-        Ok(handler) => Ok(convert_response(handle_request(handler, request).await)),
+        Ok(handler) => {
+            let method = request.method().clone();
+            Ok(convert_response(
+                method,
+                handle_request(handler, request).await,
+            ))
+        }
         Err(message) => Ok(error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             message.as_str(),
@@ -64,10 +71,20 @@ fn detect_fs_root() -> Option<String> {
     None
 }
 
-fn convert_response(response: Response<DavBody>) -> Response<Body> {
-    let (parts, body) = response.into_parts();
+fn convert_response(method: Method, response: Response<DavBody>) -> Response<Body> {
+    let (mut parts, body) = response.into_parts();
+    if method == Method::HEAD || response_status_has_no_body(parts.status) {
+        parts.headers.remove(CONTENT_LENGTH);
+    }
     let body = body.map_err(|error| std::io::Error::other(error.to_string()));
     Response::from_parts(parts, Body::from_http_body(body))
+}
+
+fn response_status_has_no_body(status: StatusCode) -> bool {
+    status.is_informational()
+        || status == StatusCode::NO_CONTENT
+        || status == StatusCode::RESET_CONTENT
+        || status == StatusCode::NOT_MODIFIED
 }
 
 fn error_response(status: StatusCode, message: &str) -> Response<Body> {
