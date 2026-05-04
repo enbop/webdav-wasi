@@ -1,0 +1,54 @@
+[package]
+name = "webdav-wasip2"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[features]
+default = []
+tokio-server = ["dep:hyper", "dep:hyper-util", "dep:tokio"]
+wasmtime-serve = ["dep:wstd"]
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1.88"
+bytes = "1.10.1"
+dav-server = { git = "https://github.com/messense/dav-server-rs", rev = "3ccc60410bb094c8c65e066a52f97f9919513e26", default-features = false }
+env_logger = "0.11.8"
+futures = "0.3"
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1.6.0", features = ["http1", "server"], optional = true }
+hyper-util = { version = "0.1.15", features = ["tokio"], optional = true }
+log = "0.4"
+thiserror = "2"
+tokio = { version = "1.46.1", features = [
+    "rt",
+    "macros",
+    "net",
+    "io-util",
+    "time",
+    "sync",
+], optional = true }
+wstd = { version = "0.6.6", optional = true }
+
+[[bin]]
+name = "webdav-wasip2"
+path = "src/main.rs"
+required-features = ["wasmtime-serve"]
+
+[[bin]]
+name = "webdav-wasip2-tokio-experimental"
+path = "src/bin/webdav_tokio_experimental.rs"
+required-features = ["tokio-server"]
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = [
+    "io-util",
+    "macros",
+    "net",
+    "rt",
+    "sync",
+    "time",
+] }

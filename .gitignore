@@ -1,0 +1,13 @@
+/target/
+
+# Runtime mount used by local wasmtime serve / client compatibility tests.
+/data/*
+!/data/
+!/data/.gitignore
+
+# OS/editor noise, especially from macOS WebDAV clients.
+.DS_Store
+._*
+*.swp
+*.swo
+*~
