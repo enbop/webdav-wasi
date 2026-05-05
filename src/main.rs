@@ -3,7 +3,7 @@ use std::{env, path::Path, sync::LazyLock};
 use dav_server::{DavHandler, body::Body as DavBody, fakels::FakeLs};
 use http::{Method, header::CONTENT_LENGTH};
 use http_body_util::BodyExt;
-use webdav_wasip2::{FileSystemBackend, MemoryBackend, WebDavFileSystem};
+use webdav_wasi::{FileSystemBackend, MemoryBackend, WebDavFileSystem};
 use wstd::http::{Body, Request, Response, StatusCode};
 
 static DAV_HANDLER: LazyLock<Result<DavHandler, String>> = LazyLock::new(init_handler);

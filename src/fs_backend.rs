@@ -344,10 +344,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time before epoch")
             .as_nanos();
-        env::temp_dir().join(format!(
-            "webdav-wasip2-test-{unique}-{}",
-            std::process::id()
-        ))
+        env::temp_dir().join(format!("webdav-wasi-test-{unique}-{}", std::process::id()))
     }
 
     #[tokio::test]

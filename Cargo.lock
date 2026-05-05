@@ -1311,7 +1311,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "webdav-wasip2"
+name = "webdav-wasi"
 version = "0.1.0"
 dependencies = [
  "anyhow",

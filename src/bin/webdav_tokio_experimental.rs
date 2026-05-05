@@ -6,7 +6,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     time::{Duration, timeout},
 };
-use webdav_wasip2::{
+use webdav_wasi::{
     FileSystemBackend, MemoryBackend, WebDavBackend, WebDavFileSystem, serve, serve_listener,
 };
 
@@ -111,11 +111,11 @@ where
     B: WebDavBackend,
 {
     backend
-        .write_chunk("hello.txt", 0, b"hello from webdav-wasip2\n".to_vec())
+        .write_chunk("hello.txt", 0, b"hello from webdav-wasi\n".to_vec())
         .await
         .context("failed to seed smoke-test file")?;
     backend
-        .truncate("hello.txt", "hello from webdav-wasip2\n".len() as u64)
+        .truncate("hello.txt", "hello from webdav-wasi\n".len() as u64)
         .await
         .context("failed to size smoke-test file")?;
     Ok(())
@@ -141,7 +141,7 @@ async fn smoke_get(addr: SocketAddr) -> anyhow::Result<()> {
     if !response.starts_with("HTTP/1.1 200") {
         bail!("unexpected response status: {response}");
     }
-    if !response.contains("hello from webdav-wasip2") {
+    if !response.contains("hello from webdav-wasi") {
         bail!("unexpected response body: {response}");
     }
 

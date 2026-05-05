@@ -1,4 +1,4 @@
-# webdav-wasip2
+# webdav-wasi
 
 Standalone WebDAV WASIp2 experiment extracted from [fungi](https://github.com/enbop/fungi)'s legacy file transfer WebDAV module.
 
@@ -16,7 +16,7 @@ The main runtime path is `wasmtime serve`: Wasmtime owns the HTTP listener, and 
 
 ```bash
 rustup target add wasm32-wasip2
-cargo build --release --target wasm32-wasip2 --no-default-features --features wasmtime-serve --bin webdav-wasip2
+cargo build --release --target wasm32-wasip2 --no-default-features --features wasmtime-serve --bin webdav-wasi
 ```
 
 ## Run With Wasmtime
@@ -26,7 +26,7 @@ Serve the local `data` directory:
 ```bash
 mkdir -p data
 wasmtime serve --addr=0.0.0.0:8080 -Scli --dir ./data::data \
-  target/wasm32-wasip2/release/webdav-wasip2.wasm
+  target/wasm32-wasip2/release/webdav-wasi.wasm
 ```
 
 Then open or mount:
@@ -40,7 +40,7 @@ Use a different guest-visible root with `WEBDAV_FS_ROOT`:
 ```bash
 mkdir -p shared
 WEBDAV_FS_ROOT=shared wasmtime serve --addr=0.0.0.0:8080 -Scli --dir ./shared::shared \
-  target/wasm32-wasip2/release/webdav-wasip2.wasm
+  target/wasm32-wasip2/release/webdav-wasi.wasm
 ```
 
 If no filesystem root is detected, the app falls back to the in-memory demo backend.
@@ -52,19 +52,19 @@ There is also a guest-owned TCP/HTTP server for comparison. This is not the pref
 Native smoke test:
 
 ```bash
-cargo run --features tokio-server --bin webdav-wasip2-tokio-experimental -- --smoke-test
+cargo run --features tokio-server --bin webdav-wasi-tokio-experimental -- --smoke-test
 ```
 
 Native server:
 
 ```bash
-cargo run --features tokio-server --bin webdav-wasip2-tokio-experimental -- --addr 127.0.0.1:8080 --fs-root ./data
+cargo run --features tokio-server --bin webdav-wasi-tokio-experimental -- --addr 127.0.0.1:8080 --fs-root ./data
 ```
 
 WASIp2 Tokio builds require Tokio's unstable WASI net support:
 
 ```bash
-RUSTFLAGS="--cfg tokio_unstable" cargo build --release --target wasm32-wasip2 --features tokio-server --bin webdav-wasip2-tokio-experimental
+RUSTFLAGS="--cfg tokio_unstable" cargo build --release --target wasm32-wasip2 --features tokio-server --bin webdav-wasi-tokio-experimental
 ```
 
 ## Notes

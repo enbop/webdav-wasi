@@ -1,5 +1,5 @@
 [package]
-name = "webdav-wasip2"
+name = "webdav-wasi"
 version = "0.1.0"
 edition = "2024"
 
@@ -34,12 +34,12 @@ tokio = { version = "1.46.1", features = [
 wstd = { version = "0.6.6", optional = true }
 
 [[bin]]
-name = "webdav-wasip2"
+name = "webdav-wasi"
 path = "src/main.rs"
 required-features = ["wasmtime-serve"]
 
 [[bin]]
-name = "webdav-wasip2-tokio-experimental"
+name = "webdav-wasi-tokio-experimental"
 path = "src/bin/webdav_tokio_experimental.rs"
 required-features = ["tokio-server"]
 
