@@ -1,14 +1,9 @@
 [package]
 name = "webdav-wasi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [workspace]
-
-[features]
-default = []
-tokio-server = ["dep:hyper", "dep:hyper-util", "dep:tokio"]
-wasmtime-serve = ["dep:wstd"]
 
 [dependencies]
 anyhow = "1"
@@ -19,29 +14,22 @@ env_logger = "0.11.8"
 futures = "0.3"
 http = "1"
 http-body-util = "0.1"
-hyper = { version = "1.6.0", features = ["http1", "server"], optional = true }
-hyper-util = { version = "0.1.15", features = ["tokio"], optional = true }
+hyper = { version = "1.6.0", features = ["http1", "server"] }
+hyper-util = { version = "0.1.15", features = ["tokio"] }
 log = "0.4"
 thiserror = "2"
-tokio = { version = "1.46.1", features = [
+tokio = { version = "1.52.3", features = [
     "rt",
     "macros",
     "net",
     "io-util",
     "time",
     "sync",
-], optional = true }
-wstd = { version = "0.6.6", optional = true }
+] }
 
 [[bin]]
 name = "webdav-wasi"
 path = "src/main.rs"
-required-features = ["wasmtime-serve"]
-
-[[bin]]
-name = "webdav-wasi-tokio-experimental"
-path = "src/bin/webdav_tokio_experimental.rs"
-required-features = ["tokio-server"]
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = [

@@ -27,7 +27,7 @@ jobs:
         run: cargo test
 
       - name: Build WASM
-        run: cargo build --release --target=wasm32-wasip2 --no-default-features --features wasmtime-serve --bin webdav-wasi
+        run: cargo build --release --target=wasm32-wasip2 --bin webdav-wasi
 
       - name: Prepare release assets
         run: |

@@ -1,96 +1,157 @@
-use std::{env, path::Path, sync::LazyLock};
+use std::{env, net::SocketAddr, path::Path};
 
-use dav_server::{DavHandler, body::Body as DavBody, fakels::FakeLs};
-use http::{Method, header::CONTENT_LENGTH};
-use http_body_util::BodyExt;
-use webdav_wasi::{FileSystemBackend, MemoryBackend, WebDavFileSystem};
-use wstd::http::{Body, Request, Response, StatusCode};
+use anyhow::{Context, bail};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    time::{Duration, timeout},
+};
+use webdav_wasi::{
+    FileSystemBackend, MemoryBackend, WebDavBackend, WebDavFileSystem, serve, serve_listener,
+};
 
-static DAV_HANDLER: LazyLock<Result<DavHandler, String>> = LazyLock::new(init_handler);
+#[derive(Debug)]
+struct Args {
+    addr: SocketAddr,
+    smoke_test: bool,
+    fs_root: Option<String>,
+}
 
-#[wstd::http_server]
-async fn main(request: Request<Body>) -> Result<Response<Body>, wstd::http::Error> {
-    match DAV_HANDLER.as_ref() {
-        Ok(handler) => {
-            let method = request.method().clone();
-            Ok(convert_response(
-                method,
-                handle_request(handler, request).await,
-            ))
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
+    let args = parse_args()?;
+
+    if args.smoke_test {
+        return run_smoke_test().await;
+    }
+
+    let fs_root = args.fs_root.or_else(detect_fs_root);
+    run_server(args.addr, fs_root.as_deref()).await
+}
+
+fn parse_args() -> anyhow::Result<Args> {
+    let mut args = env::args().skip(1);
+    let mut parsed = Args {
+        addr: "127.0.0.1:8080".parse().unwrap(),
+        smoke_test: false,
+        fs_root: None,
+    };
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--smoke-test" => parsed.smoke_test = true,
+            "--addr" => {
+                parsed.addr = args
+                    .next()
+                    .context("missing socket address after --addr")?
+                    .parse()
+                    .context("invalid socket address")?;
+            }
+            "--fs-root" => {
+                parsed.fs_root = Some(args.next().context("missing path after --fs-root")?);
+            }
+            other => bail!("unknown argument: {other}"),
         }
-        Err(message) => Ok(error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            message.as_str(),
-        )),
-    }
-}
-
-async fn handle_request(handler: &DavHandler, request: Request<Body>) -> Response<DavBody> {
-    let (parts, body) = request.into_parts();
-    let body = body
-        .into_boxed_body()
-        .map_err(|error| std::io::Error::other(error.to_string()));
-    handler.handle(Request::from_parts(parts, body)).await
-}
-
-fn init_handler() -> Result<DavHandler, String> {
-    let _ = env_logger::try_init();
-
-    let builder = DavHandler::builder().locksystem(FakeLs::new());
-
-    if let Some(root) = detect_fs_root() {
-        let backend = FileSystemBackend::new(&root)
-            .map_err(|error| format!("failed to initialize file backend at {root}: {error}"))?;
-        log::info!(
-            "wasmtime serve mode using filesystem backend at {}",
-            backend.root().display()
-        );
-        return Ok(builder
-            .filesystem(Box::new(WebDavFileSystem::new(backend)))
-            .build_handler());
     }
 
-    log::info!("wasmtime serve mode using in-memory demo backend");
-    Ok(builder
-        .filesystem(Box::new(WebDavFileSystem::new(MemoryBackend::demo())))
-        .build_handler())
+    Ok(parsed)
 }
 
 fn detect_fs_root() -> Option<String> {
     if let Ok(root) = env::var("WEBDAV_FS_ROOT") {
-        let trimmed = root.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
+        let root = root.trim();
+        if !root.is_empty() {
+            return Some(root.to_string());
         }
     }
 
-    if Path::new("data").exists() {
-        return Some("data".to_string());
+    Path::new("data").exists().then(|| "data".to_string())
+}
+
+async fn run_server(addr: SocketAddr, fs_root: Option<&str>) -> anyhow::Result<()> {
+    match fs_root {
+        Some(root) => {
+            let backend = FileSystemBackend::new(root)
+                .with_context(|| format!("failed to initialize file backend at {root}"))?;
+            log::info!(
+                "serving filesystem backend from {}",
+                backend.root().display()
+            );
+            serve(addr, WebDavFileSystem::new(backend)).await
+        }
+        None => {
+            let backend = MemoryBackend::demo();
+            serve(addr, WebDavFileSystem::new(backend)).await
+        }
+    }
+}
+
+async fn run_smoke_test() -> anyhow::Result<()> {
+    // Smoke tests must never seed or truncate files in a user's service root.
+    let backend = MemoryBackend::default();
+    ensure_smoke_test_fixture(&backend).await?;
+    run_smoke_test_with_backend(backend).await
+}
+
+async fn run_smoke_test_with_backend<B>(backend: B) -> anyhow::Result<()>
+where
+    B: WebDavBackend,
+{
+    let filesystem = WebDavFileSystem::new(backend);
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .context("failed to bind smoke-test listener")?;
+    let addr = listener
+        .local_addr()
+        .context("failed to get smoke-test addr")?;
+
+    let server = tokio::spawn(async move { serve_listener(listener, filesystem).await });
+    let result = smoke_get(addr).await;
+    server.abort();
+    result
+}
+
+async fn ensure_smoke_test_fixture<B>(backend: &B) -> anyhow::Result<()>
+where
+    B: WebDavBackend,
+{
+    backend
+        .write_chunk("hello.txt", 0, b"hello from webdav-wasi\n".to_vec())
+        .await
+        .context("failed to seed smoke-test file")?;
+    backend
+        .truncate("hello.txt", "hello from webdav-wasi\n".len() as u64)
+        .await
+        .context("failed to size smoke-test file")?;
+    Ok(())
+}
+
+async fn smoke_get(addr: SocketAddr) -> anyhow::Result<()> {
+    let mut stream = timeout(Duration::from_secs(5), TcpStream::connect(addr))
+        .await
+        .context("timed out connecting to webdav server")??;
+
+    stream
+        .write_all(b"GET /hello.txt HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .context("failed to write request")?;
+    stream.flush().await.context("failed to flush request")?;
+
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(5), stream.read_to_end(&mut response))
+        .await
+        .context("timed out reading response")??;
+
+    let response = String::from_utf8(response).context("response was not valid utf-8")?;
+    if !response.starts_with("HTTP/1.1 200") {
+        bail!("unexpected response status: {response}");
+    }
+    if !response.contains("hello from webdav-wasi") {
+        bail!("unexpected response body: {response}");
     }
 
-    None
-}
-
-fn convert_response(method: Method, response: Response<DavBody>) -> Response<Body> {
-    let (mut parts, body) = response.into_parts();
-    if method == Method::HEAD || response_status_has_no_body(parts.status) {
-        parts.headers.remove(CONTENT_LENGTH);
-    }
-    let body = body.map_err(|error| std::io::Error::other(error.to_string()));
-    Response::from_parts(parts, Body::from_http_body(body))
-}
-
-fn response_status_has_no_body(status: StatusCode) -> bool {
-    status.is_informational()
-        || status == StatusCode::NO_CONTENT
-        || status == StatusCode::RESET_CONTENT
-        || status == StatusCode::NOT_MODIFIED
-}
-
-fn error_response(status: StatusCode, message: &str) -> Response<Body> {
-    Response::builder()
-        .status(status)
-        .header("content-type", "text/plain; charset=utf-8")
-        .body(Body::from(message.to_owned()))
-        .expect("error response should build")
+    println!("smoke test passed against http://{addr}/hello.txt");
+    Ok(())
 }
